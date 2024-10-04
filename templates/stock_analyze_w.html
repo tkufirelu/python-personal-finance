@@ -1,0 +1,45 @@
+{% extends "base.html" %} {% block content %}
+
+<div class="container mt-4" style="padding-top: 20px;">
+  <div class="card" style="background-color: #f0f8ff; border: 1px solid #b0c4de; box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.2);font-family: 'Roboto', sans-serif;">
+    <div class="card-body custom-form">
+<h4>個股週線技術分析及預測指標</h4>
+<form method="post" action="stock_detail_w">
+  <div class="mb-3">
+    <label for="stock_id" class="form-label">請輸入欲查詢分析之股票代號</label>
+    <input type="text" class="form-control" id="stock_id" name="stock_id" required/>
+    <div class="mb-3">
+      <label for="date" class="form-label">起始日期</label>
+      <input type="date" class="form-control" id="date" name="date" required/>
+    </div>
+    <div class="mb-3">
+      <label for="end_date" class="form-label">結束日期</label>
+      <input type="date" class="form-control" id="end_date" name="end_date" required/>
+    </div>
+  </div>
+
+  <!-- 可選的選擇平均線 -->
+  <div class="mb-3">
+    <label for="ma_selection" class="form-label">選擇移動平均線</label><br>
+    <input type="checkbox" id="ma5" name="moving_averages" value="5">
+    <label for="ma5">5週</label><br>
+    <input type="checkbox" id="ma10" name="moving_averages" value="10">
+    <label for="ma10">10週</label><br>
+    <input type="checkbox" id="ma20" name="moving_averages" value="20">
+    <label for="ma20">20週</label><br>
+    <input type="checkbox" id="ma60" name="moving_averages" value="60">
+    <label for="ma60">60週</label><br>
+    <input type="checkbox" id="ma120" name="moving_averages" value="120">
+    <label for="ma120">120週</label><br>
+    <input type="checkbox" id="ma240" name="moving_averages" value="240">
+    <label for="ma240">240週</label>
+  </div>
+
+  <button type="submit" class="btn btn-primary">提交表單</button>
+</form>
+
+  </div>
+ </div>
+</div>
+
+{% endblock %}

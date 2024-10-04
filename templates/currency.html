@@ -1,0 +1,30 @@
+{% extends "base.html" %} {% block content %}
+
+<div class="container mt-4" style="padding-top: 20px;">
+  <div class="card" style="background-color: #f0f8ff; border: 1px solid #b0c4de; box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.2);font-family: 'Roboto', sans-serif;">
+    <div class="card-body custom-form">
+
+      <h3>外幣對美元即時匯率資訊</h3>
+      <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Currency Pair</th>
+                <th>Exchange Rate</th>
+                <th>UTC Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for key, value in currency.items() %}
+            <tr>
+                <td>{{ key }}</td>
+                <td>{{ value['Exrate'] }}</td>
+                <td>{{ value['UTC'] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+  </div>
+ </div>
+</div>
+
+{% endblock %}

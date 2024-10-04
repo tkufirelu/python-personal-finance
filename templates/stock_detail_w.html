@@ -1,0 +1,17 @@
+{% extends "base.html" %} {% block content %}
+
+<div class="container mt-4" style="padding-top: 20px;">
+  <div class="card" style="background-color: #f0f8ff; border: 1px solid #b0c4de; box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.2);font-family: 'Roboto', sans-serif;">
+    <div class="card-body custom-form">
+
+      
+
+      <h4>{{ stock_id }} 個股週線圖技術分析及預測指標</h4>
+    <div>{{ k_line_html | safe }}</div>
+
+      
+  </div>
+ </div>
+</div>
+
+{% endblock %}

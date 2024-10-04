@@ -1,0 +1,49 @@
+{% extends "base.html" %} {% block content %}
+
+<div class="container mt-4" style="padding-top: 20px;">
+  <div class="card" style="background-color: #f0f8ff; border: 1px solid #b0c4de; box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.2);font-family: 'Roboto', sans-serif;">
+    <div class="card-body custom-form">
+
+      <h4 class="my-4" style="display: inline;">我國與主要貿易對手通貨對台幣之歷史匯率(每月)</h4> <h6 style="display: inline;"><b style="color: crimson;">自1960至今</b></h6>
+      <div class="table-responsive">
+        <table class="table table-bordered table-striped">
+            <thead>
+                <tr>
+                    <th>日期</th>
+                    <th>美元USD/NTD</th>
+                    <th>日圓JPY/NTD</th>
+                    <th>英鎊GBP/NTD</th>
+                    <th>港幣HKD/NTD</th>
+                    <th>韓元KRW/NTD</th>
+                    <th>加拿大幣CAD/NTD</th>
+                    <th>新加坡元SGD/NTD</th>
+                    <th>人民幣CNY/NTD</th>
+                    <th>澳幣AUD/NTD</th>
+                    <th>印尼盾IDR/NTD</th>
+                    <th>泰銖THB/NTD</th>
+                    <th>馬來西亞幣MYR/NTD</th>
+                    <th>菲律賓披索PHP/NTD</th>
+                    <th>歐元EUR/NTD</th>
+                    <th>馬克DEM/NTD</th>
+                    <th>法國法郎FRF/NTD</th>
+                    <th>荷蘭幣NLG/NTD</th>
+                    <th>越南盾VND/NTD</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in currencies %}
+                <tr>
+                    <td>{{ row[0] }}</td>
+                    {% for data in row[1:] %}
+                    <td>{{ data }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+  </div>
+ </div>
+</div>
+
+{% endblock %}

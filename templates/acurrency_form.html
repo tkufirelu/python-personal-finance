@@ -1,0 +1,31 @@
+{% extends "base.html" %} {% block content %}
+
+<div class="container mt-4" style="padding-top: 20px;">
+  <div class="card" style="background-color: #f0f8ff; border: 1px solid #b0c4de; box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.2);font-family: 'Roboto', sans-serif;">
+    <div class="card-body custom-form">
+
+      <h4>選擇欲分析之外幣及期間</h4>
+    <form method="POST">
+      <div class="mb-3">
+        <label for="acurrency">選擇貨幣:</label>
+        <select name="acurrency" id="acurrency" required>
+            {% for code, name in currency_options.items() %}
+                <option value="{{ code }}">{{ name }}</option>
+            {% endfor %}
+        </select>
+      </div>
+      <div class="mb-3">
+          <label for="start_date">開始日期 :</label>
+          <input type="month" name="start_date" id="start_date" required>
+      </div>
+      <div class="mb-3">
+          <label for="end_date">結束日期 :</label>
+          <input type="month" name="end_date" id="end_date" required>
+      </div>
+        <button type="submit" class="btn btn-primary">查詢</button>
+    </form>
+  </div>
+ </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,90 @@
+{% extends "base.html" %} {% block content %}
+
+<div class="container mt-4" style="padding-top: 20px;">
+  <div class="card" style="background-color: #f0f8ff; border: 1px solid #b0c4de; box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.2);font-family: 'Roboto', sans-serif;">
+    <div class="card-body custom-form">
+
+
+  <form id="currency-form" method="post" action="http://127.0.0.1/cash" >  
+    <div class="mb-3">
+      <label for="taiwanese-dollars" class="form-label">台幣</label>
+      <input
+        type="number"
+        class="form-control"
+        id="taiwanese-dollars"
+        name="taiwanese-dollars"
+        value="0"
+      />
+    </div>
+  
+    <div class="mb-3">
+      <label for="us-dollars" class="form-label">美元</label>
+      <input
+        step="0.01"
+        type="number"
+        class="form-control"
+        id="us-dollars"
+        name="us-dollars"
+        value="0"
+      />
+    </div>
+  
+    <div class="mb-3">
+      <label for="jp-dollars" class="form-label">日幣</label>
+      <input
+        type="number"
+        class="form-control"
+        id="jp-dollars"
+        name="jp-dollars"
+        value="0"
+      />
+    </div>
+  
+    <div class="mb-3">
+      <label for="eu-dollars" class="form-label">歐元</label>
+      <input
+        step="0.01"
+        type="number"
+        class="form-control"
+        id="eu-dollars"
+        name="eu-dollars"
+        value="0"
+      />
+    </div>
+  
+    <div class="mb-3">
+      <label for="note" class="form-label">備註</label>
+      <input type="text" class="form-control" id="note" name="note" />
+    </div>
+  
+    <div class="mb-3">
+      <label for="date" class="form-label">日期</label>
+      <input type="date" class="form-control" id="date" name="date" required/>
+    </div>
+  
+    <button type="submit" class="btn btn-primary">提交表單</button>
+  </form>
+  </div>
+ </div>
+</div>
+
+
+<script>
+  document.getElementById('currency-form').addEventListener('submit', function(event) {
+      var taiwaneseDollars = parseFloat(document.getElementById('taiwanese-dollars').value) || 0;
+      var usDollars = parseFloat(document.getElementById('us-dollars').value) || 0;
+      var jpDollars = parseFloat(document.getElementById('jp-dollars').value) || 0;
+      var euDollars = parseFloat(document.getElementById('eu-dollars').value) || 0;
+  
+      // 檢查至少有一個金額不為 0
+      if (taiwaneseDollars === 0 && usDollars === 0 && jpDollars === 0 && euDollars === 0) {
+          alert('至少要填寫一個金額！');
+          event.preventDefault(); // 阻止表單提交
+      }
+  });
+  </script>
+  
+
+{% endblock %}
+
+

@@ -1,0 +1,132 @@
+{% extends "base.html" %} {% block content %}
+<div id="cash-info" style="padding-top: 50px;">
+  <div class="card" style="padding: 15px;background-color: #f0f8ff; border: 1px solid #b0c4de; box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.2);font-family: 'Roboto', sans-serif;">
+  <h4>現金庫存</h4>
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th scope="col">台幣</th>
+        <th scope="col">美元</th>
+        <th scope="col">日幣</th>
+        <th scope="col">歐元</th>
+        <th scope="col">現金總額(台幣)</th>
+      </tr>
+    </thead>
+    <tr>
+      <td>{{data['td']}}</td>
+      <td>{{data['ud']}}</td>  
+      <td>{{data['jd']}}</td>   
+      <td>{{data['ed']}}</td>         
+      <td>{{data['total']}}</td>
+    </tr>
+  </table>
+    <ul class="list-group">
+      <li class="list-group-item">美元即時匯率: {{data['currency']}} , 日幣即時匯率: {{data['jcurrency']}} , 歐元即時匯率: {{data['ecurrency']}}</li>
+    </ul>
+  </div>
+  
+<br><br>
+  <div class="card" style="padding: 15px;background-color: #f0f8ff; border: 1px solid #b0c4de; box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.2);font-family: 'Roboto', sans-serif;">
+  <h4>現金更動紀錄</h4>   
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <!-- <th scope="col">ID</th> -->
+        <th scope="col">台幣</th>
+        <th scope="col">美元</th>
+        <th scope="col">日幣</th>
+        <th scope="col">歐元</th>
+        <th scope="col">註記</th>
+        <th scope="col">時間</th>
+        <th scope="col">刪除資料</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for data in data['cash_result'] %}
+      <tr>
+        <!-- <td>{{data[0]}}</td> -->
+        <td>{{data[1]}}</td>
+        <td>{{data[2]}}</td>
+        <td>{{data[3]}}</td>
+        <td>{{data[4]}}</td>
+        <td>{{data[5]}}</td>
+        <td>{{data[6]}}</td>
+        <td>
+          <form action="/cash-delete" method="post">
+            <input type="hidden" name="id" value="{{data[0]}}" />
+            <button class="btn btn-primary">刪除此筆資料</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>  
+</div>
+
+<br><br>
+
+<div id="stock-info">
+  <div class="card" style="padding: 15px;background-color: #f0f8ff; border: 1px solid #b0c4de; box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.2);font-family: 'Roboto', sans-serif;">
+    <h4>股票庫存</h4>
+    <div class="table-responsive">
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th scope="col">股票代號</th>
+            <th scope="col">持有股數</th>
+            <th scope="col">目前股價</th>
+            <th scope="col">目前市值</th>
+            <th scope="col">股票資產占比(%)</th>
+            <th scope="col">購買總成本(包含手續費)</th>
+            <th scope="col">平均成本</th>
+            <th scope="col">報酬率(%)</th>
+            <th scope="col">投資損益</th>
+            <th scope="col">刪除資料</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in data['stock_info'] %}
+          <tr>
+            <td>{{d['stock_id']}}</td>
+            <td>{{d['shares']}}</td>
+            <td>{{d['current_price']}}</td>
+            <td>{{d['total_value']}}</td>
+            <td>{{d['value_percentage']}}</td>
+            <td>{{d['stock_cost']}}</td>
+            <td>{{d['average_cost']}}</td>
+            <td>{{d['rate_of_return']}}</td>
+            <td>{{d['investment_return']}}</td>
+            <td>
+              <form action="/stock-delete" method="post">
+                <input type="hidden" name="stock_id" value="{{d['stock_id']}}" />
+                <button class="btn btn-primary">刪除此筆資料</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  
+  </div>
+  
+</div>
+
+<div id="chart" style="display: flex; flex-wrap: wrap">
+  {% if data['show_pic_1'] %}
+  <figure style="flex: 0 1 500px; margin: 10px">
+    <figcaption><h4>股票庫存占比圖</h4></figcaption>
+    <img style="width: 100%" src="/static/piechart.jpg" alt="股票庫存占比圖" />
+  </figure>
+  {% endif %} {% if data['show_pic_2'] %}
+  <figure style="flex: 0 1 500px; margin: 10px">
+    <figcaption><h4>資產比例占比圖</h4></figcaption>
+    <img style="width: 100%" src="/static/piechart2.jpg" alt="資產比例占比圖" />
+  </figure>
+  {% endif %}
+</div>
+
+
+{% endblock %}
+
