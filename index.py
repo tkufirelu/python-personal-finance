@@ -105,7 +105,8 @@ def index():
         response=requests.get(url)
         data=response.json()
         price_array=data['data']
-        current_price=float(price_array[len(price_array)-1][6])
+        current_price = float(price_array[len(price_array)-1][6].replace(',', ''))
+
         #單一股票總市值
         total_value=round(current_price*shares)
         total_stock_value += total_value
