@@ -482,6 +482,7 @@ def stock_detail_k():
     response = requests.get(url, params=params, headers=headers, verify=False)
     data = response.json()
     
+    # 確認是否有資料
     if 'data' not in data or len(data['data']) == 0:
         return render_template('stock_detail_k.html', stock_id=stock_id, k_line_html='No data available.')
 
@@ -489,6 +490,7 @@ def stock_detail_k():
     df['date'] = pd.to_datetime(df['date'])
     df.set_index('date', inplace=True)
     
+    # 選擇需要的欄位並重新命名
     df = df[['open', 'max', 'min', 'close', 'Trading_Volume']].rename(columns={
         'open': 'Open',
         'max': 'High',
@@ -496,12 +498,14 @@ def stock_detail_k():
         'close': 'Close',
         'Trading_Volume': 'Volume'
     })
-    
+
+    # 檢查是否有足夠的資料來計算技術指標（至少20筆資料）
     if len(df) >= 20:
+        # 計算布林帶與移動平均線
         df['MA20'] = df['Close'].rolling(window=20).mean()
         df['stddev'] = df['Close'].rolling(window=20).std()
-        df['Upper'] = df['MA20'] + (df['stddev'] * 2)
-        df['Lower'] = df['MA20'] - (df['stddev'] * 2)
+        df['Upper_BB'] = df['MA20'] + (df['stddev'] * 2)
+        df['Lower_BB'] = df['MA20'] - (df['stddev'] * 2)
 
     selected_mas = request.form.getlist('moving_averages')
     selected_mas = [int(ma) for ma in selected_mas]
@@ -509,12 +513,12 @@ def stock_detail_k():
     color_map = {5: 'blue', 10: 'orange', 20: 'yellow', 60: 'purple', 120: 'brown', 240: 'red'}
     
     for ma in selected_mas:
-        if ma <= len(df):
+        if len(df) >= ma:
             df[f'MA{ma}'] = df['Close'].rolling(window=ma).mean()
 
     # 創建子圖，使用 row_heights 調整高度
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.1, 
-                        subplot_titles=(f'{stock_id} 日線圖', 'Trading Volume', 'RSI and MACD'),
+                        subplot_titles=('','' , 'RSI and MACD'),
                         row_heights=[0.7, 0.15, 0.15])
 
     # K線圖
@@ -532,21 +536,29 @@ def stock_detail_k():
         if ma <= len(df):
             fig.add_trace(go.Scatter(x=df.index, y=df[f'MA{ma}'], mode='lines', name=f'MA{ma}', line=dict(color=color_map[ma])), row=1, col=1)
 
+    # 檢查布林帶是否存在
+    if 'Upper_BB' in df.columns and 'Lower_BB' in df.columns:
+        # 添加布林帶
+        fig.add_trace(go.Scatter(x=df.index, y=df['Upper_BB'], mode='lines', name='Upper BB', line=dict(color='gray', dash='dash')), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['Lower_BB'], mode='lines', name='Lower BB', line=dict(color='gray', dash='dash')), row=1, col=1)
+
     # 計算 RSI 指標
-    delta = df['Close'].diff(1)
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.rolling(window=14, min_periods=1).mean()
-    avg_loss = loss.rolling(window=14, min_periods=1).mean()
-    rs = avg_gain / avg_loss
-    df['RSI'] = 100 - (100 / (1 + rs))
+    if len(df) >= 14:  # 檢查資料長度是否足夠計算 RSI
+        delta = df['Close'].diff(1)
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        avg_gain = gain.rolling(window=14, min_periods=1).mean()
+        avg_loss = loss.rolling(window=14, min_periods=1).mean()
+        rs = avg_gain / avg_loss
+        df['RSI'] = 100 - (100 / (1 + rs))
 
     # 計算 MACD 指標
-    df['EMA12'] = df['Close'].ewm(span=12, adjust=False).mean()
-    df['EMA26'] = df['Close'].ewm(span=26, adjust=False).mean()
-    df['MACD'] = df['EMA12'] - df['EMA26']
-    df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
-    
+    if len(df) >= 26:  # 檢查資料長度是否足夠計算 MACD
+        df['EMA12'] = df['Close'].ewm(span=12, adjust=False).mean()
+        df['EMA26'] = df['Close'].ewm(span=26, adjust=False).mean()
+        df['MACD'] = df['EMA12'] - df['EMA26']
+        df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+
     # 決定交易量顏色（漲紅跌綠）
     volume_colors = ['red' if df['Close'][i] > df['Open'][i] else 'green' for i in range(len(df))]
 
@@ -554,23 +566,54 @@ def stock_detail_k():
     fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name='Trading Volume', marker_color=volume_colors), row=2, col=1)
     
     # 在第三個子圖中添加 RSI 和 MACD
-    fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], mode='lines', name='RSI', line=dict(color='purple')), row=3, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], mode='lines', name='MACD', line=dict(color='blue')), row=3, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], mode='lines', name='Signal', line=dict(color='red')), row=3, col=1)
+    if 'RSI' in df.columns:
+        fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], mode='lines', name='RSI', line=dict(color='purple')), row=3, col=1)
+    
+    if 'MACD' in df.columns and 'Signal' in df.columns:
+        fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], mode='lines', name='MACD', line=dict(color='blue')), row=3, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], mode='lines', name='Signal', line=dict(color='red')), row=3, col=1)
 
-    # 更新母圖 x 軸標籤的顯示，強制顯示日期
-    fig.update_xaxes(showticklabels=True, row=1, col=1)
+    # 更新母圖 x 軸標籤的顯示，僅在 K 線圖下方顯示日期
+    fig.update_xaxes(
+        showticklabels=True,  # 顯示日期標籤
+        tickfont=dict(family='Arial', size=12, color='black'),
+        tickangle=45,  # 避免日期重疊
+        row=1, col=1  # 只在 K 線圖部分顯示日期
+    )
 
-    # 更新布局，設置整體高度
-    fig.update_layout(height=1000,
-                      xaxis_title='Date',
-                      yaxis_title='Price',
-                      xaxis_rangeslider_visible=False)
+    # 隱藏其他子圖（交易量和 RSI/MACD）的 x 軸標籤
+    fig.update_xaxes(showticklabels=False, row=2, col=1)  # 隱藏交易量的日期標籤
+    fig.update_xaxes(showticklabels=False, row=3, col=1)  # 隱藏 RSI 和 MACD 的日期標籤
+
+    # 更新布局，設置更酷的視覺效果與互動選項
+    fig.update_layout(
+        height=750,
+        xaxis_title='Date',
+        yaxis_title='Price',
+        xaxis_rangeslider_visible=False,
+        hovermode='x unified',  # 統一顯示同一日期的所有數據
+        legend=dict(
+            orientation="h",  # 水平放置圖例
+            yanchor="bottom", y=1, 
+            xanchor="center", x=0.5
+        ),
+        plot_bgcolor='white',  # 更清晰的背景色
+        xaxis=dict(
+            showline=True, showgrid=False, showticklabels=True, linecolor='black', linewidth=2
+        ),
+        yaxis=dict(
+            showline=True, showgrid=False, linecolor='black', linewidth=2
+        )
+    )
 
     # 將圖表儲存為 HTML 格式以便於顯示
     fig_html = fig.to_html(full_html=False)
 
     return render_template('stock_detail_k.html', stock_id=stock_id, k_line_html=fig_html)
+
+
+
+
 
 
 
@@ -596,6 +639,7 @@ def stock_detail_w():
     response = requests.get(url, params=params, headers=headers, verify=False)
     data = response.json()
     
+    # 確認是否有資料
     if 'data' not in data or len(data['data']) == 0:
         return render_template('stock_detail_w.html', stock_id=stock_id, k_line_html='No data available.')
 
@@ -603,14 +647,17 @@ def stock_detail_w():
     df['date'] = pd.to_datetime(df['date'])
     df.set_index('date', inplace=True)
     
-    # 將資料轉換為週資料
-    df = df.resample('W').agg({
+    # 將日資料轉換為週資料
+    df_weekly = df.resample('W').agg({
         'open': 'first',
         'max': 'max',
         'min': 'min',
         'close': 'last',
         'Trading_Volume': 'sum'
-    }).rename(columns={
+    })
+
+    # 選擇需要的欄位並重新命名
+    df_weekly = df_weekly[['open', 'max', 'min', 'close', 'Trading_Volume']].rename(columns={
         'open': 'Open',
         'max': 'High',
         'min': 'Low',
@@ -618,75 +665,121 @@ def stock_detail_w():
         'Trading_Volume': 'Volume'
     })
 
-    # 移動平均線
+    # 檢查是否有足夠的資料來計算技術指標（至少20筆資料）
+    if len(df_weekly) >= 20:
+        # 計算布林帶與移動平均線
+        df_weekly['MA20'] = df_weekly['Close'].rolling(window=20).mean()
+        df_weekly['stddev'] = df_weekly['Close'].rolling(window=20).std()
+        df_weekly['Upper_BB'] = df_weekly['MA20'] + (df_weekly['stddev'] * 2)
+        df_weekly['Lower_BB'] = df_weekly['MA20'] - (df_weekly['stddev'] * 2)
+
     selected_mas = request.form.getlist('moving_averages')
     selected_mas = [int(ma) for ma in selected_mas]
 
     color_map = {5: 'blue', 10: 'orange', 20: 'yellow', 60: 'purple', 120: 'brown', 240: 'red'}
     
     for ma in selected_mas:
-        if ma <= len(df):
-            df[f'MA{ma}'] = df['Close'].rolling(window=ma).mean()
+        if len(df_weekly) >= ma:
+            df_weekly[f'MA{ma}'] = df_weekly['Close'].rolling(window=ma).mean()
 
     # 創建子圖，使用 row_heights 調整高度
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.1, 
-                        subplot_titles=(f'{stock_id} 週線圖', 'Trading Volume', 'RSI and MACD'),
+                        subplot_titles=('','' , 'RSI and MACD'),
                         row_heights=[0.7, 0.15, 0.15])
 
     # K線圖
-    fig.add_trace(go.Candlestick(x=df.index,
-                                  open=df['Open'],
-                                  high=df['High'],
-                                  low=df['Low'],
-                                  close=df['Close'],
+    fig.add_trace(go.Candlestick(x=df_weekly.index,
+                                  open=df_weekly['Open'],
+                                  high=df_weekly['High'],
+                                  low=df_weekly['Low'],
+                                  close=df_weekly['Close'],
                                   name='Candlestick',
                                   increasing_line_color='red', 
                                   decreasing_line_color='green'), row=1, col=1)
 
     # 添加移動平均線
     for ma in selected_mas:
-        if ma <= len(df):
-            fig.add_trace(go.Scatter(x=df.index, y=df[f'MA{ma}'], mode='lines', name=f'MA{ma}', line=dict(color=color_map[ma])), row=1, col=1)
+        if ma <= len(df_weekly):
+            fig.add_trace(go.Scatter(x=df_weekly.index, y=df_weekly[f'MA{ma}'], mode='lines', name=f'MA{ma}', line=dict(color=color_map[ma])), row=1, col=1)
+
+    # 檢查布林帶是否存在
+    if 'Upper_BB' in df_weekly.columns and 'Lower_BB' in df_weekly.columns:
+        # 添加布林帶
+        fig.add_trace(go.Scatter(x=df_weekly.index, y=df_weekly['Upper_BB'], mode='lines', name='Upper BB', line=dict(color='gray', dash='dash')), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df_weekly.index, y=df_weekly['Lower_BB'], mode='lines', name='Lower BB', line=dict(color='gray', dash='dash')), row=1, col=1)
 
     # 計算 RSI 指標
-    delta = df['Close'].diff(1)
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.rolling(window=14, min_periods=1).mean()
-    avg_loss = loss.rolling(window=14, min_periods=1).mean()
-    rs = avg_gain / avg_loss
-    df['RSI'] = 100 - (100 / (1 + rs))
+    if len(df_weekly) >= 14:  # 檢查資料長度是否足夠計算 RSI
+        delta = df_weekly['Close'].diff(1)
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        avg_gain = gain.rolling(window=14, min_periods=1).mean()
+        avg_loss = loss.rolling(window=14, min_periods=1).mean()
+        rs = avg_gain / avg_loss
+        df_weekly['RSI'] = 100 - (100 / (1 + rs))
 
     # 計算 MACD 指標
-    df['EMA12'] = df['Close'].ewm(span=12, adjust=False).mean()
-    df['EMA26'] = df['Close'].ewm(span=26, adjust=False).mean()
-    df['MACD'] = df['EMA12'] - df['EMA26']
-    df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
-    
+    if len(df_weekly) >= 26:  # 檢查資料長度是否足夠計算 MACD
+        df_weekly['EMA12'] = df_weekly['Close'].ewm(span=12, adjust=False).mean()
+        df_weekly['EMA26'] = df_weekly['Close'].ewm(span=26, adjust=False).mean()
+        df_weekly['MACD'] = df_weekly['EMA12'] - df_weekly['EMA26']
+        df_weekly['Signal'] = df_weekly['MACD'].ewm(span=9, adjust=False).mean()
+
     # 決定交易量顏色（漲紅跌綠）
-    volume_colors = ['red' if df['Close'][i] > df['Open'][i] else 'green' for i in range(len(df))]
+    volume_colors = ['red' if df_weekly['Close'][i] > df_weekly['Open'][i] else 'green' for i in range(len(df_weekly))]
 
     # 在第二個子圖中添加交易量，顏色與K線圖一致
-    fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name='Trading Volume', marker_color=volume_colors), row=2, col=1)
+    fig.add_trace(go.Bar(x=df_weekly.index, y=df_weekly['Volume'], name='Trading Volume', marker_color=volume_colors), row=2, col=1)
     
     # 在第三個子圖中添加 RSI 和 MACD
-    fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], mode='lines', name='RSI', line=dict(color='purple')), row=3, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], mode='lines', name='MACD', line=dict(color='blue')), row=3, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], mode='lines', name='Signal', line=dict(color='red')), row=3, col=1)
+    if 'RSI' in df_weekly.columns:
+        fig.add_trace(go.Scatter(x=df_weekly.index, y=df_weekly['RSI'], mode='lines', name='RSI', line=dict(color='purple')), row=3, col=1)
+    
+    if 'MACD' in df_weekly.columns and 'Signal' in df_weekly.columns:
+        fig.add_trace(go.Scatter(x=df_weekly.index, y=df_weekly['MACD'], mode='lines', name='MACD', line=dict(color='blue')), row=3, col=1)
+        fig.add_trace(go.Scatter(x=df_weekly.index, y=df_weekly['Signal'], mode='lines', name='Signal', line=dict(color='red')), row=3, col=1)
 
-    # 更新母圖 x 軸標籤的顯示，強制顯示日期
-    fig.update_xaxes(showticklabels=True, row=1, col=1)
+    # 更新布局，設置更酷的視覺效果與互動選項
+    fig.update_layout(
+        height=750,
+        xaxis_title='Date',
+        yaxis_title='Price',
+        xaxis_rangeslider_visible=False,
+        hovermode='x unified',  # 統一顯示同一日期的所有數據
+        legend=dict(
+            orientation="h",  # 水平放置圖例
+            yanchor="bottom", y=1, 
+            xanchor="center", x=0.5
+        ),
+        plot_bgcolor='white',  # 更清晰的背景色
+        xaxis=dict(
+            showline=True, showgrid=False, showticklabels=True, linecolor='black', linewidth=2
+        ),
+        yaxis=dict(
+            showline=True, showgrid=False, linecolor='black', linewidth=2
+        )
+    )
 
-    # 更新布局，設置整體高度
-    fig.update_layout(height=1000,
-                      xaxis_title='Date',
-                      yaxis_title='Price',
-                      xaxis_rangeslider_visible=False)
+    # 強制顯示 x 軸日期，只在K線圖下方顯示
+    fig.update_xaxes(
+        showticklabels=True,  # 這裡只會在第一個子圖顯示日期
+        tickfont=dict(family='Arial', size=12, color='black'),
+        tickangle=45,  # 避免日期重疊
+        row=1, col=1  # 只在K線圖部分顯示日期
+    )
+
+    # 隱藏其他子圖的 x 軸標籤
+    fig.update_xaxes(showticklabels=False, row=2, col=1)
+    fig.update_xaxes(showticklabels=False, row=3, col=1)
 
     # 將圖表儲存為 HTML 格式以便於顯示
     fig_html = fig.to_html(full_html=False)
 
     return render_template('stock_detail_w.html', stock_id=stock_id, k_line_html=fig_html)
+
+
+
+
 
 
 
@@ -712,34 +805,39 @@ def stock_detail_m():
     response = requests.get(url, params=params, headers=headers, verify=False)
     data = response.json()
     
+    # 確認是否有資料
     if 'data' not in data or len(data['data']) == 0:
-        return render_template('stock_detail_k.html', stock_id=stock_id, k_line_html='No data available.')
+        return render_template('stock_detail_m.html', stock_id=stock_id, k_line_html='No data available.')
 
     df = pd.DataFrame(data['data'])
     df['date'] = pd.to_datetime(df['date'])
     df.set_index('date', inplace=True)
-
-    df = df.resample('M').agg({
+    
+    # 將日資料轉換為月資料
+    df_monthly = df.resample('M').agg({
         'open': 'first',
         'max': 'max',
         'min': 'min',
         'close': 'last',
         'Trading_Volume': 'sum'
-    }).dropna()
+    })
 
-    df = df[['open', 'max', 'min', 'close', 'Trading_Volume']].rename(columns={
+    # 選擇需要的欄位並重新命名
+    df_monthly = df_monthly[['open', 'max', 'min', 'close', 'Trading_Volume']].rename(columns={
         'open': 'Open',
         'max': 'High',
         'min': 'Low',
         'close': 'Close',
         'Trading_Volume': 'Volume'
     })
-    
-    if len(df) >= 20:
-        df['MA20'] = df['Close'].rolling(window=20).mean()
-        df['stddev'] = df['Close'].rolling(window=20).std()
-        df['Upper'] = df['MA20'] + (df['stddev'] * 2)
-        df['Lower'] = df['MA20'] - (df['stddev'] * 2)
+
+    # 檢查是否有足夠的資料來計算技術指標（至少20筆資料）
+    if len(df_monthly) >= 20:
+        # 計算布林帶與移動平均線
+        df_monthly['MA20'] = df_monthly['Close'].rolling(window=20).mean()
+        df_monthly['stddev'] = df_monthly['Close'].rolling(window=20).std()
+        df_monthly['Upper_BB'] = df_monthly['MA20'] + (df_monthly['stddev'] * 2)
+        df_monthly['Lower_BB'] = df_monthly['MA20'] - (df_monthly['stddev'] * 2)
 
     selected_mas = request.form.getlist('moving_averages')
     selected_mas = [int(ma) for ma in selected_mas]
@@ -747,63 +845,97 @@ def stock_detail_m():
     color_map = {5: 'blue', 10: 'orange', 20: 'yellow', 60: 'purple', 120: 'brown', 240: 'red'}
     
     for ma in selected_mas:
-        if ma <= len(df):
-            df[f'MA{ma}'] = df['Close'].rolling(window=ma).mean()
+        if len(df_monthly) >= ma:
+            df_monthly[f'MA{ma}'] = df_monthly['Close'].rolling(window=ma).mean()
 
     # 創建子圖，使用 row_heights 調整高度
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.1, 
-                        subplot_titles=(f'{stock_id} 月線圖', 'Trading Volume', 'RSI and MACD'),
+                        subplot_titles=('','' , 'RSI and MACD'),
                         row_heights=[0.7, 0.15, 0.15])
 
     # K線圖
-    fig.add_trace(go.Candlestick(x=df.index,
-                                  open=df['Open'],
-                                  high=df['High'],
-                                  low=df['Low'],
-                                  close=df['Close'],
+    fig.add_trace(go.Candlestick(x=df_monthly.index,
+                                  open=df_monthly['Open'],
+                                  high=df_monthly['High'],
+                                  low=df_monthly['Low'],
+                                  close=df_monthly['Close'],
                                   name='Candlestick',
                                   increasing_line_color='red', 
                                   decreasing_line_color='green'), row=1, col=1)
 
     # 添加移動平均線
     for ma in selected_mas:
-        if ma <= len(df):
-            fig.add_trace(go.Scatter(x=df.index, y=df[f'MA{ma}'], mode='lines', name=f'MA{ma}', line=dict(color=color_map[ma])), row=1, col=1)
+        if ma <= len(df_monthly):
+            fig.add_trace(go.Scatter(x=df_monthly.index, y=df_monthly[f'MA{ma}'], mode='lines', name=f'MA{ma}', line=dict(color=color_map[ma])), row=1, col=1)
+
+    # 檢查布林帶是否存在
+    if 'Upper_BB' in df_monthly.columns and 'Lower_BB' in df_monthly.columns:
+        # 添加布林帶
+        fig.add_trace(go.Scatter(x=df_monthly.index, y=df_monthly['Upper_BB'], mode='lines', name='Upper BB', line=dict(color='gray', dash='dash')), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df_monthly.index, y=df_monthly['Lower_BB'], mode='lines', name='Lower BB', line=dict(color='gray', dash='dash')), row=1, col=1)
 
     # 計算 RSI 指標
-    delta = df['Close'].diff(1)
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.rolling(window=14, min_periods=1).mean()
-    avg_loss = loss.rolling(window=14, min_periods=1).mean()
-    rs = avg_gain / avg_loss
-    df['RSI'] = 100 - (100 / (1 + rs))
+    if len(df_monthly) >= 14:  # 檢查資料長度是否足夠計算 RSI
+        delta = df_monthly['Close'].diff(1)
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        avg_gain = gain.rolling(window=14, min_periods=1).mean()
+        avg_loss = loss.rolling(window=14, min_periods=1).mean()
+        rs = avg_gain / avg_loss
+        df_monthly['RSI'] = 100 - (100 / (1 + rs))
 
     # 計算 MACD 指標
-    df['EMA12'] = df['Close'].ewm(span=12, adjust=False).mean()
-    df['EMA26'] = df['Close'].ewm(span=26, adjust=False).mean()
-    df['MACD'] = df['EMA12'] - df['EMA26']
-    df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
-    
+    if len(df_monthly) >= 26:  # 檢查資料長度是否足夠計算 MACD
+        df_monthly['EMA12'] = df_monthly['Close'].ewm(span=12, adjust=False).mean()
+        df_monthly['EMA26'] = df_monthly['Close'].ewm(span=26, adjust=False).mean()
+        df_monthly['MACD'] = df_monthly['EMA12'] - df_monthly['EMA26']
+        df_monthly['Signal'] = df_monthly['MACD'].ewm(span=9, adjust=False).mean()
+
     # 決定交易量顏色（漲紅跌綠）
-    volume_colors = ['red' if df['Close'][i] > df['Open'][i] else 'green' for i in range(len(df))]
+    volume_colors = ['red' if df_monthly['Close'][i] > df_monthly['Open'][i] else 'green' for i in range(len(df_monthly))]
 
     # 在第二個子圖中添加交易量，顏色與K線圖一致
-    fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name='Trading Volume', marker_color=volume_colors), row=2, col=1)
+    fig.add_trace(go.Bar(x=df_monthly.index, y=df_monthly['Volume'], name='Trading Volume', marker_color=volume_colors), row=2, col=1)
     
     # 在第三個子圖中添加 RSI 和 MACD
-    fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], mode='lines', name='RSI', line=dict(color='purple')), row=3, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], mode='lines', name='MACD', line=dict(color='blue')), row=3, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], mode='lines', name='Signal', line=dict(color='red')), row=3, col=1)
+    if 'RSI' in df_monthly.columns:
+        fig.add_trace(go.Scatter(x=df_monthly.index, y=df_monthly['RSI'], mode='lines', name='RSI', line=dict(color='purple')), row=3, col=1)
+    
+    if 'MACD' in df_monthly.columns and 'Signal' in df_monthly.columns:
+        fig.add_trace(go.Scatter(x=df_monthly.index, y=df_monthly['MACD'], mode='lines', name='MACD', line=dict(color='blue')), row=3, col=1)
+        fig.add_trace(go.Scatter(x=df_monthly.index, y=df_monthly['Signal'], mode='lines', name='Signal', line=dict(color='red')), row=3, col=1)
 
-    # 更新母圖 x 軸標籤的顯示，強制顯示日期
-    fig.update_xaxes(showticklabels=True, row=1, col=1)
+    # 更新布局，設置更酷的視覺效果與互動選項
+    fig.update_layout(
+        height=750,
+        yaxis_title='Price',
+        xaxis_rangeslider_visible=False,
+        hovermode='x unified',  # 統一顯示同一日期的所有數據
+        legend=dict(
+            orientation="h",  # 水平放置圖例
+            yanchor="bottom", y=1, 
+            xanchor="center", x=0.5
+        ),
+        plot_bgcolor='white',  # 更清晰的背景色
+        xaxis=dict(
+            showline=True, showgrid=False, showticklabels=True, linecolor='black', linewidth=2
+        ),
+        yaxis=dict(
+            showline=True, showgrid=False, linecolor='black', linewidth=2
+        )
+    )
 
-    # 更新布局，設置整體高度
-    fig.update_layout(height=1000,
-                      xaxis_title='Date',
-                      yaxis_title='Price',
-                      xaxis_rangeslider_visible=False)
+    # 強制顯示 x 軸日期，只在K線圖下方顯示
+    fig.update_xaxes(
+        showticklabels=True,  # 這裡只會在第一個子圖顯示日期
+        tickfont=dict(family='Arial', size=12, color='black'),
+        tickangle=45,  # 避免日期重疊
+        row=1, col=1  # 只在K線圖部分顯示日期
+    )
+
+    # 隱藏其他子圖的 x 軸標籤
+    fig.update_xaxes(showticklabels=False, row=2, col=1)
+    fig.update_xaxes(showticklabels=False, row=3, col=1)
 
     # 將圖表儲存為 HTML 格式以便於顯示
     fig_html = fig.to_html(full_html=False)
