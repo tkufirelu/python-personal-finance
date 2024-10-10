@@ -1,4 +1,4 @@
-from flask import Flask,render_template,request,g,redirect,url_for, flash,session
+from flask import Flask,render_template,request,g,redirect,url_for, flash,session,jsonify
 import mysql.connector
 import requests
 import math
@@ -311,18 +311,23 @@ def all_stock():
 
 
 
+
+
 @app.route('/stock_detail_year', methods=['POST'])
 def stock_detail_year():
     # 取得當前日期
     current_date = datetime.now()
-    # 將日期設置為一年前
-    one_year_ago = current_date - timedelta(days=365)
-    # 格式化為 'yyyy-mm-dd'
+    
+    # 根據按鈕請求的區間來設定開始日期，預設為3個月
+    period_months = int(request.form.get('months', 3))
+    start_date = current_date - timedelta(days=30 * period_months)
+    
+    # 格式化日期為 'yyyy-mm-dd'
     today = current_date.strftime('%Y-%m-%d')
-    year_ago = one_year_ago.strftime('%Y-%m-%d')
+    start_date = start_date.strftime('%Y-%m-%d')
 
     stock_id = request.values['stock_id']
-    date = year_ago
+    date = start_date
     end_date = today
     url = "https://api.finmindtrade.com/api/v3/data"
     headers = {
@@ -339,7 +344,7 @@ def stock_detail_year():
 
     # 確認是否有資料
     if 'data' not in data or len(data['data']) == 0:
-        return render_template('stock_detail_year.html', stock_id=stock_id, k_line_html='No data available.')
+        return render_template('stock_detail_year.html', stock_id=stock_id, k_line_html='No data available.', months=period_months)
 
     df = pd.DataFrame(data['data'])
     df['date'] = pd.to_datetime(df['date'])
@@ -444,20 +449,27 @@ def stock_detail_year():
             name='Death Cross'
         ), row=3, col=1)
 
-    # 更新佈局設置
+    # 更新佈局設置，僅在K線圖顯示L形的xy軸線條
     fig.update_layout(
         height=750,
-        xaxis_title='Date',
-        yaxis_title='Price',
+        xaxis1_title='Date',
+        yaxis1_title='Price',
         xaxis_rangeslider_visible=False,
         hovermode='x unified',
         plot_bgcolor='white'
     )
 
+    # 針對K線圖（第1行第1列）顯示x軸和y軸的左邊和下邊線條（L形）
+    fig.update_xaxes(showline=True, linewidth=2, linecolor='black', mirror=False, row=1, col=1, ticks='outside', showgrid=False)
+    fig.update_yaxes(showline=True, linewidth=2, linecolor='black', mirror=False, row=1, col=1, ticks='outside', showgrid=False)
+
     # 將圖表儲存為 HTML 格式以便於顯示
     fig_html = fig.to_html(full_html=False)
 
-    return render_template('stock_detail_year.html', stock_id=stock_id, k_line_html=fig_html)
+    return render_template('stock_detail_year.html', stock_id=stock_id, k_line_html=fig_html, months=period_months)
+
+
+
 
 
 
@@ -500,6 +512,14 @@ def stock_detail_k():
         'Trading_Volume': 'Volume'
     })
 
+    # 計算所有移動平均線
+    moving_averages = [5, 10, 20, 60, 120, 240]  # 所有移動平均線
+    color_map = {5: 'blue', 10: 'orange', 20: 'yellow', 60: 'purple', 120: 'brown', 240: 'red'}
+    
+    for ma in moving_averages:
+        if len(df) >= ma:
+            df[f'MA{ma}'] = df['Close'].rolling(window=ma).mean()
+
     # 檢查是否有足夠的資料來計算技術指標（至少20筆資料）
     if len(df) >= 20:
         # 計算布林帶與移動平均線
@@ -507,15 +527,6 @@ def stock_detail_k():
         df['stddev'] = df['Close'].rolling(window=20).std()
         df['Upper_BB'] = df['MA20'] + (df['stddev'] * 2)
         df['Lower_BB'] = df['MA20'] - (df['stddev'] * 2)
-
-    selected_mas = request.form.getlist('moving_averages')
-    selected_mas = [int(ma) for ma in selected_mas]
-
-    color_map = {5: 'blue', 10: 'orange', 20: 'yellow', 60: 'purple', 120: 'brown', 240: 'red'}
-    
-    for ma in selected_mas:
-        if len(df) >= ma:
-            df[f'MA{ma}'] = df['Close'].rolling(window=ma).mean()
 
     # 創建子圖，使用 row_heights 調整高度
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.1, 
@@ -532,9 +543,9 @@ def stock_detail_k():
                                   increasing_line_color='red', 
                                   decreasing_line_color='green'), row=1, col=1)
 
-    # 添加移動平均線
-    for ma in selected_mas:
-        if ma <= len(df):
+    # 添加所有移動平均線
+    for ma in moving_averages:
+        if len(df) >= ma:
             fig.add_trace(go.Scatter(x=df.index, y=df[f'MA{ma}'], mode='lines', name=f'MA{ma}', line=dict(color=color_map[ma])), row=1, col=1)
 
     # 檢查布林帶是否存在
@@ -618,7 +629,6 @@ def stock_detail_k():
 
 
 
-
 # 畫個股週線圖
 @app.route('/stock_detail_w', methods=['POST'])
 def stock_detail_w():
@@ -666,6 +676,14 @@ def stock_detail_w():
         'Trading_Volume': 'Volume'
     })
 
+    # 預設顯示所有移動平均線
+    moving_averages = [5, 10, 20, 60, 120, 240]
+    color_map = {5: 'blue', 10: 'orange', 20: 'yellow', 60: 'purple', 120: 'brown', 240: 'red'}
+    
+    for ma in moving_averages:
+        if len(df_weekly) >= ma:
+            df_weekly[f'MA{ma}'] = df_weekly['Close'].rolling(window=ma).mean()
+
     # 檢查是否有足夠的資料來計算技術指標（至少20筆資料）
     if len(df_weekly) >= 20:
         # 計算布林帶與移動平均線
@@ -673,15 +691,6 @@ def stock_detail_w():
         df_weekly['stddev'] = df_weekly['Close'].rolling(window=20).std()
         df_weekly['Upper_BB'] = df_weekly['MA20'] + (df_weekly['stddev'] * 2)
         df_weekly['Lower_BB'] = df_weekly['MA20'] - (df_weekly['stddev'] * 2)
-
-    selected_mas = request.form.getlist('moving_averages')
-    selected_mas = [int(ma) for ma in selected_mas]
-
-    color_map = {5: 'blue', 10: 'orange', 20: 'yellow', 60: 'purple', 120: 'brown', 240: 'red'}
-    
-    for ma in selected_mas:
-        if len(df_weekly) >= ma:
-            df_weekly[f'MA{ma}'] = df_weekly['Close'].rolling(window=ma).mean()
 
     # 創建子圖，使用 row_heights 調整高度
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.1, 
@@ -698,8 +707,8 @@ def stock_detail_w():
                                   increasing_line_color='red', 
                                   decreasing_line_color='green'), row=1, col=1)
 
-    # 添加移動平均線
-    for ma in selected_mas:
+    # 添加所有移動平均線
+    for ma in moving_averages:
         if ma <= len(df_weekly):
             fig.add_trace(go.Scatter(x=df_weekly.index, y=df_weekly[f'MA{ma}'], mode='lines', name=f'MA{ma}', line=dict(color=color_map[ma])), row=1, col=1)
 
@@ -784,7 +793,6 @@ def stock_detail_w():
 
 
 
-
 # 畫個股月線圖
 @app.route('/stock_detail_m', methods=['POST'])
 def stock_detail_m():
@@ -832,6 +840,14 @@ def stock_detail_m():
         'Trading_Volume': 'Volume'
     })
 
+    # 預設顯示所有移動平均線
+    moving_averages = [5, 10, 20, 60, 120, 240]  # 所有移動平均線
+    color_map = {5: 'blue', 10: 'orange', 20: 'yellow', 60: 'purple', 120: 'brown', 240: 'red'}
+    
+    for ma in moving_averages:
+        if len(df_monthly) >= ma:
+            df_monthly[f'MA{ma}'] = df_monthly['Close'].rolling(window=ma).mean()
+
     # 檢查是否有足夠的資料來計算技術指標（至少20筆資料）
     if len(df_monthly) >= 20:
         # 計算布林帶與移動平均線
@@ -839,15 +855,6 @@ def stock_detail_m():
         df_monthly['stddev'] = df_monthly['Close'].rolling(window=20).std()
         df_monthly['Upper_BB'] = df_monthly['MA20'] + (df_monthly['stddev'] * 2)
         df_monthly['Lower_BB'] = df_monthly['MA20'] - (df_monthly['stddev'] * 2)
-
-    selected_mas = request.form.getlist('moving_averages')
-    selected_mas = [int(ma) for ma in selected_mas]
-
-    color_map = {5: 'blue', 10: 'orange', 20: 'yellow', 60: 'purple', 120: 'brown', 240: 'red'}
-    
-    for ma in selected_mas:
-        if len(df_monthly) >= ma:
-            df_monthly[f'MA{ma}'] = df_monthly['Close'].rolling(window=ma).mean()
 
     # 創建子圖，使用 row_heights 調整高度
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.1, 
@@ -864,8 +871,8 @@ def stock_detail_m():
                                   increasing_line_color='red', 
                                   decreasing_line_color='green'), row=1, col=1)
 
-    # 添加移動平均線
-    for ma in selected_mas:
+    # 添加所有移動平均線
+    for ma in moving_averages:
         if ma <= len(df_monthly):
             fig.add_trace(go.Scatter(x=df_monthly.index, y=df_monthly[f'MA{ma}'], mode='lines', name=f'MA{ma}', line=dict(color=color_map[ma])), row=1, col=1)
 
@@ -942,6 +949,10 @@ def stock_detail_m():
     fig_html = fig.to_html(full_html=False)
 
     return render_template('stock_detail_m.html', stock_id=stock_id, k_line_html=fig_html)
+
+
+
+
 
 
 

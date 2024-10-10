@@ -4,8 +4,34 @@
   <div class="card" style="background-color: #f0f8ff; border: 1px solid #b0c4de; box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.2);font-family: 'Roboto', sans-serif;">
     <div class="card-body custom-form">
         
-        <h4>{{ stock_id }} 一年內日線圖</h4>
-    <div>{{ k_line_html | safe }}</div>
+    <div style="display: flex; align-items: center; margin-bottom: 10px;">
+      <!-- 股票代號顯示 -->
+      <h4 style="padding-right: 30px; margin: 0;">股票代號: {{ stock_id }}</h4>
+      
+      <!-- 按鈕組 -->
+      <form method="POST" action="/stock_detail_year" style="display: flex;">
+          <input type="hidden" name="stock_id" value="{{ stock_id }}">
+
+           <!-- 按鈕根據選中狀態改變樣式 -->
+           <button type="submit" name="months" value="3" style="margin-right: 10px;"
+           class="btn {% if months == 3 %}btn-danger{% else %}btn-outline-danger{% endif %} fw-bold">3 個月</button>
+       
+       <button type="submit" name="months" value="6" style="margin-right: 10px;"
+           class="btn {% if months == 6 %}btn-danger{% else %}btn-outline-danger{% endif %} fw-bold">6 個月</button>
+       
+       <button type="submit" name="months" value="9" style="margin-right: 10px;"
+           class="btn {% if months == 9 %}btn-danger{% else %}btn-outline-danger{% endif %} fw-bold">9 個月</button>
+       
+       <button type="submit" name="months" value="12" style="margin-right: 10px;"
+           class="btn {% if months == 12 %}btn-danger{% else %}btn-outline-danger{% endif %} fw-bold">12 個月</button>
+      </form>
+  </div>
+
+  <div>
+      {{ k_line_html|safe }}
+  </div>
+
+
   </div>
  </div>
 </div>
