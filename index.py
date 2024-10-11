@@ -291,6 +291,12 @@ def stock_analyze_w():
 def stock_analyze_m():
     return render_template('stock_analyze_m.html')
 
+
+
+
+
+
+
 @app.route('/all_stock')
 def all_stock():
     current_date = datetime.now()
@@ -298,37 +304,126 @@ def all_stock():
     url = "https://api.finmindtrade.com/api/v3/data"
     token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkYXRlIjoiMjAyNC0wNy0yOSAxMzoxNjozOSIsInVzZXJfaWQiOiJmaXJlbHUiLCJpcCI6IjYwLjI0OC4yNy45NyJ9.YVvyzwMl2rVix04C6L6DbTn3O_b04qwwglzxa_sozek"  
     params = {
-      "dataset": "TaiwanStockInfo",
-      "date": today
+        "dataset": "TaiwanStockInfo",
+        "date": today
     }
     headers = {
-      "Authorization": f"Bearer {token}"
+        "Authorization": f"Bearer {token}"
     }
     response = requests.get(url, params=params, headers=headers)
     data = response.json()
-    return render_template('all_stock.html', data=data['data'])
+
+    # 取得所有產業類別，並且不重複
+    industry_categories = {item['industry_category'] for item in data['data']}
+    
+    # 傳遞產業類別到模板
+    return render_template('all_stock.html', industry_categories=industry_categories)
 
 
 
 
 
 
-@app.route('/stock_detail_year', methods=['POST'])
+
+
+@app.route('/industry_stocks', methods=['POST'])
+def industry_stocks():
+    industry_category = request.form['industry_category']
+
+    # 從API取得股票資料
+    current_date = datetime.now()
+    today = current_date.strftime('%Y-%m-%d')
+    url = "https://api.finmindtrade.com/api/v3/data"
+    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkYXRlIjoiMjAyNC0wNy0yOSAxMzoxNjozOSIsInVzZXJfaWQiOiJmaXJlbHUiLCJpcCI6IjYwLjI0OC4yNy45NyJ9.YVvyzwMl2rVix04C6L6DbTn3O_b04qwwglzxa_sozek"
+    params = {
+        "dataset": "TaiwanStockInfo",
+        "date": today
+    }
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    response = requests.get(url, params=params, headers=headers)
+    data = response.json()
+
+    # 篩選出選定產業類別的股票
+    stocks = [stock for stock in data['data'] if stock['industry_category'] == industry_category]
+
+    # 顯示該產業類別下的所有股票代號與名稱
+    return render_template('industry_stocks.html', stocks=stocks, category=industry_category)
+
+
+
+
+
+
+
+
+@app.route('/search_stock', methods=['POST'])
+def search_stock():
+    search_query = request.form['search_query'].strip()
+
+    # 從API取得股票資料
+    current_date = datetime.now()
+    today = current_date.strftime('%Y-%m-%d')
+    url = "https://api.finmindtrade.com/api/v3/data"
+    token = "YOUR_API_TOKEN"
+    params = {
+        "dataset": "TaiwanStockInfo",
+        "date": today
+    }
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    response = requests.get(url, params=params, headers=headers)
+    data = response.json()['data']
+
+    # 搜尋股票代號或名稱
+    stock = next((stock for stock in data if stock['stock_id'] == search_query or stock['stock_name'] == search_query), None)
+
+    if stock:
+        # 重定向到 stock_detail_year，傳遞股票代號和名稱
+        return redirect(url_for('stock_detail_year', stock_id=stock['stock_id'], stock_name=stock['stock_name']))
+    else:
+        # 如果沒有找到股票，返回錯誤訊息，導向錯誤頁面
+        return redirect(url_for('search_error'))
+
+
+
+
+
+@app.route('/search_error')
+def search_error():
+    return render_template('search_error.html')
+
+
+
+
+
+
+
+@app.route('/stock_detail_year', methods=['POST', 'GET'])
 def stock_detail_year():
+    if request.method == 'POST':
+        # POST 請求接收的資料
+        stock_id = request.form.get('stock_id')
+        stock_name = request.form.get('stock_name')
+    else:
+        # GET 請求可能是通過搜尋來的，接收 URL 參數
+        stock_id = request.args.get('stock_id')
+        stock_name = request.args.get('stock_name')
+
     # 取得當前日期
     current_date = datetime.now()
     
     # 根據按鈕請求的區間來設定開始日期，預設為3個月
-    period_months = int(request.form.get('months', 3))
+    period_months = int(request.form.get('months', 3)) if request.method == 'POST' else 3
     start_date = current_date - timedelta(days=30 * period_months)
     
     # 格式化日期為 'yyyy-mm-dd'
     today = current_date.strftime('%Y-%m-%d')
     start_date = start_date.strftime('%Y-%m-%d')
 
-    stock_id = request.values['stock_id']
-    date = start_date
-    end_date = today
+    # 取得股票歷史資料
     url = "https://api.finmindtrade.com/api/v3/data"
     headers = {
         'x-api-key': 'M5eNfByz5THRCYAH6akFsCADQaygvuzynUHx4rw9rNdbYSgTAwvCQF4G36yAFxkA'
@@ -336,15 +431,15 @@ def stock_detail_year():
     params = {
         "dataset": "TaiwanStockPrice",
         "stock_id": stock_id,
-        "date": date,
-        "end_date": end_date,
+        "date": start_date,
+        "end_date": today,
     }
     response = requests.get(url, params=params, headers=headers, verify=False)
     data = response.json()
 
     # 確認是否有資料
     if 'data' not in data or len(data['data']) == 0:
-        return render_template('stock_detail_year.html', stock_id=stock_id, k_line_html='No data available.', months=period_months)
+        return render_template('stock_detail_year.html', stock_id=stock_id, stock_name=stock_name, k_line_html='<H1>該檔股票已下市</H1>', months=period_months)
 
     df = pd.DataFrame(data['data'])
     df['date'] = pd.to_datetime(df['date'])
@@ -370,9 +465,9 @@ def stock_detail_year():
             df[f'MA{ma}'] = None  # 資料不足，設為 None
 
     # 創建K線圖
-    fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.1,
-                        subplot_titles=('', '', 'RSI and MACD'),
-                        row_heights=[0.7, 0.15, 0.15])
+    fig = make_subplots(rows=4, cols=1, shared_xaxes=True, vertical_spacing=0.1,
+                        subplot_titles=('', '', 'RSI', 'MACD'),
+                        row_heights=[0.5, 0.15, 0.15, 0.2])
 
     # K線圖
     fig.add_trace(go.Candlestick(x=df.index,
@@ -402,9 +497,9 @@ def stock_detail_year():
         df['RSI'] = 100 - (100 / (1 + rs))
 
     # 計算 MACD 指標
-    if len(df) >= 26:
-        df['EMA12'] = df['Close'].ewm(span=12, adjust=False).mean()
-        df['EMA26'] = df['Close'].ewm(span=26, adjust=False).mean()
+    if len(df) >= 13:
+        df['EMA12'] = df['Close'].ewm(span=6, adjust=False).mean()
+        df['EMA26'] = df['Close'].ewm(span=13, adjust=False).mean()
         df['MACD'] = df['EMA12'] - df['EMA26']
         df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
@@ -424,13 +519,14 @@ def stock_detail_year():
     volume_colors = ['red' if df['Close'][i] > df['Open'][i] else 'green' for i in range(len(df))]
     fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name='Trading Volume', marker_color=volume_colors), row=2, col=1)
 
-    # 在第三個子圖中添加 RSI 和 MACD
+    # 在第三個子圖中添加 RSI
     if 'RSI' in df.columns:
         fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], mode='lines', name='RSI', line=dict(color='purple')), row=3, col=1)
 
+    # 在第四個子圖中添加 MACD 和 Signal
     if 'MACD' in df.columns and 'Signal' in df.columns:
-        fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], mode='lines', name='MACD', line=dict(color='blue')), row=3, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], mode='lines', name='Signal', line=dict(color='red')), row=3, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], mode='lines', name='MACD', line=dict(color='blue')), row=4, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], mode='lines', name='Signal', line=dict(color='red')), row=4, col=1)
 
         # 添加黃金交叉和死亡交叉的標記
         fig.add_trace(go.Scatter(
@@ -439,7 +535,7 @@ def stock_detail_year():
             mode='markers',
             marker=dict(color='red', symbol='arrow-up', size=10),
             name='Golden Cross'
-        ), row=3, col=1)
+        ), row=4, col=1)
 
         fig.add_trace(go.Scatter(
             x=death_crosses.index,
@@ -447,11 +543,11 @@ def stock_detail_year():
             mode='markers',
             marker=dict(color='green', symbol='arrow-down', size=10),
             name='Death Cross'
-        ), row=3, col=1)
+        ), row=4, col=1)
 
     # 更新佈局設置，僅在K線圖顯示L形的xy軸線條
     fig.update_layout(
-        height=750,
+        height=850,
         xaxis1_title='Date',
         yaxis1_title='Price',
         xaxis_rangeslider_visible=False,
@@ -459,14 +555,22 @@ def stock_detail_year():
         plot_bgcolor='white'
     )
 
-    # 針對K線圖（第1行第1列）顯示x軸和y軸的左邊和下邊線條（L形）
-    fig.update_xaxes(showline=True, linewidth=2, linecolor='black', mirror=False, row=1, col=1, ticks='outside', showgrid=False)
-    fig.update_yaxes(showline=True, linewidth=2, linecolor='black', mirror=False, row=1, col=1, ticks='outside', showgrid=False)
+    # 針對第1, 2, 3, 4 張子圖顯示 x 軸和 y 軸的左邊和下邊線條（L形）
+    for row in range(1, 5):
+        fig.update_xaxes(showline=True, linewidth=2, linecolor='black', mirror=False, row=row, col=1, ticks='outside', showgrid=False)
+        fig.update_yaxes(showline=True, linewidth=2, linecolor='black', mirror=False, row=row, col=1, ticks='outside', showgrid=False)
+
+    # 調整 RSI 和 MACD 的 y 軸範圍
+    fig.update_yaxes(title_text="RSI", range=[0, 100], row=3, col=1)
+    fig.update_yaxes(title_text="MACD", range=[-100, 100], row=4, col=1)
+    fig.update_yaxes(title_text="MACD", range=[-100, 100], row=4, col=1)
 
     # 將圖表儲存為 HTML 格式以便於顯示
     fig_html = fig.to_html(full_html=False)
 
-    return render_template('stock_detail_year.html', stock_id=stock_id, k_line_html=fig_html, months=period_months)
+    # 傳遞 stock_name 和 stock_id 給模板顯示
+    return render_template('stock_detail_year.html', stock_id=stock_id, stock_name=stock_name, k_line_html=fig_html, months=period_months)
+                     
 
 
 
@@ -528,10 +632,28 @@ def stock_detail_k():
         df['Upper_BB'] = df['MA20'] + (df['stddev'] * 2)
         df['Lower_BB'] = df['MA20'] - (df['stddev'] * 2)
 
-    # 創建子圖，使用 row_heights 調整高度
-    fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.1, 
-                        subplot_titles=('','' , 'RSI and MACD'),
-                        row_heights=[0.7, 0.15, 0.15])
+    # 計算 RSI 指標
+    if len(df) >= 14:  # 檢查資料長度是否足夠計算 RSI
+        delta = df['Close'].diff(1)
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        avg_gain = gain.rolling(window=14, min_periods=1).mean()
+        avg_loss = loss.rolling(window=14, min_periods=1).mean()
+        rs = avg_gain / avg_loss
+        df['RSI'] = 100 - (100 / (1 + rs))
+
+    # 計算 MACD 指標
+    if len(df) >= 13:  # 檢查資料長度是否足夠計算 MACD
+        df['EMA6'] = df['Close'].ewm(span=6, adjust=False).mean()
+        df['EMA13'] = df['Close'].ewm(span=13, adjust=False).mean()
+        df['MACD'] = df['EMA6'] - df['EMA13']
+        df['Signal'] = df['MACD'].ewm(span=5, adjust=False).mean()
+        df['MACD_Hist'] = df['MACD'] - df['Signal']  # MACD柱狀圖
+
+    # 創建子圖，使用 row_heights 調整高度，為 OSC 增加一個獨立的子圖
+    fig = make_subplots(rows=4, cols=1, shared_xaxes=True, vertical_spacing=0.05, 
+                        subplot_titles=('', '', 'RSI & MACD', 'OSC'),
+                        row_heights=[0.5, 0.1, 0.2, 0.2])
 
     # K線圖
     fig.add_trace(go.Candlestick(x=df.index,
@@ -554,27 +676,8 @@ def stock_detail_k():
         fig.add_trace(go.Scatter(x=df.index, y=df['Upper_BB'], mode='lines', name='Upper BB', line=dict(color='gray', dash='dash')), row=1, col=1)
         fig.add_trace(go.Scatter(x=df.index, y=df['Lower_BB'], mode='lines', name='Lower BB', line=dict(color='gray', dash='dash')), row=1, col=1)
 
-    # 計算 RSI 指標
-    if len(df) >= 14:  # 檢查資料長度是否足夠計算 RSI
-        delta = df['Close'].diff(1)
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
-        avg_gain = gain.rolling(window=14, min_periods=1).mean()
-        avg_loss = loss.rolling(window=14, min_periods=1).mean()
-        rs = avg_gain / avg_loss
-        df['RSI'] = 100 - (100 / (1 + rs))
-
-    # 計算 MACD 指標
-    if len(df) >= 26:  # 檢查資料長度是否足夠計算 MACD
-        df['EMA12'] = df['Close'].ewm(span=12, adjust=False).mean()
-        df['EMA26'] = df['Close'].ewm(span=26, adjust=False).mean()
-        df['MACD'] = df['EMA12'] - df['EMA26']
-        df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
-
-    # 決定交易量顏色（漲紅跌綠）
+    # 在第二個子圖中添加交易量
     volume_colors = ['red' if df['Close'][i] > df['Open'][i] else 'green' for i in range(len(df))]
-
-    # 在第二個子圖中添加交易量，顏色與K線圖一致
     fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name='Trading Volume', marker_color=volume_colors), row=2, col=1)
     
     # 在第三個子圖中添加 RSI 和 MACD
@@ -585,25 +688,82 @@ def stock_detail_k():
         fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], mode='lines', name='MACD', line=dict(color='blue')), row=3, col=1)
         fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], mode='lines', name='Signal', line=dict(color='red')), row=3, col=1)
 
-    # 更新母圖 x 軸標籤的顯示，僅在 K 線圖下方顯示日期
+    # 在第四個子圖中添加 MACD 的柱狀圖（Histogram）
+    if 'MACD_Hist' in df.columns:
+        fig.add_trace(go.Bar(x=df.index, y=df['MACD_Hist'], name='OSC (MACD Histogram)',
+                             marker_color=['red' if val >= 0 else 'green' for val in df['MACD_Hist']]), row=4, col=1)
+        # 添加一條水平線，表示零軸
+        fig.add_hline(y=0, line=dict(color="black", width=1), row=4, col=1)
+
+    # 更新各個子圖的 x 軸和 y 軸，讓它們有 L 形線條
     fig.update_xaxes(
-        showticklabels=True,  # 顯示日期標籤
-        tickfont=dict(family='Arial', size=12, color='black'),
-        tickangle=45,  # 避免日期重疊
-        row=1, col=1  # 只在 K 線圖部分顯示日期
+        showline=True,  # 顯示 x 軸的線條
+        linecolor='black',  # x 軸線條的顏色
+        linewidth=2,  # x 軸線條的寬度
+        showticklabels=False,  # 不顯示日期標籤
+        row=1, col=1  # 第一張子圖 (K 線圖)
     )
 
-    # 隱藏其他子圖（交易量和 RSI/MACD）的 x 軸標籤
-    fig.update_xaxes(showticklabels=False, row=2, col=1)  # 隱藏交易量的日期標籤
-    fig.update_xaxes(showticklabels=False, row=3, col=1)  # 隱藏 RSI 和 MACD 的日期標籤
+    fig.update_xaxes(
+        showline=True,  # 顯示 x 軸的線條
+        linecolor='black',  # x 軸線條的顏色
+        linewidth=2,  # x 軸線條的寬度
+        showticklabels=False,  # 不顯示日期標籤
+        row=2, col=1  # 第二張子圖 (交易量圖)
+    )
 
-    # 更新布局，設置更酷的視覺效果與互動選項
+    fig.update_xaxes(
+        showline=True,  # 顯示 x 軸的線條
+        linecolor='black',  # x 軸線條的顏色
+        linewidth=2,  # x 軸線條的寬度
+        showticklabels=False,  # 不顯示日期標籤
+        row=3, col=1  # 第三張子圖 (RSI 和 MACD)
+    )
+
+    fig.update_xaxes(
+        showline=True,  # 顯示 x 軸的線條
+        linecolor='black',  # x 軸線條的顏色
+        linewidth=2,  # x 軸線條的寬度
+        showticklabels=True,  # 僅在 OSC 下方顯示日期標籤
+        row=4, col=1  # 第四張子圖 (OSC)
+    )
+
+    fig.update_yaxes(
+        showline=True,  # 顯示 y 軸的線條
+        linecolor='black',  # y 軸線條的顏色
+        linewidth=2,  # y 軸線條的寬度
+        row=1, col=1  # 第一張子圖 (K 線圖)
+    )
+
+    fig.update_yaxes(
+        showline=True,  # 顯示 y 軸的線條
+        linecolor='black',  # y 軸線條的顏色
+        linewidth=2,  # y 軸線條的寬度
+        row=2, col=1  # 第二張子圖 (交易量圖)
+    )
+
+    fig.update_yaxes(
+        showline=True,  # 顯示 y 軸的線條
+        linecolor='black',  # y 軸線條的顏色
+        linewidth=2,  # y 軸線條的寬度
+        row=3, col=1  # 第三張子圖 (RSI 和 MACD)
+    )
+
+    fig.update_yaxes(
+        showline=True,  # 顯示 y 軸的線條
+        linecolor='black',  # y 軸線條的顏色
+        linewidth=2,  # y 軸線條的寬度
+        row=4, col=1  # 第四張子圖 (OSC)
+    )
+
+    # 更新布局以移除頂端邊距
     fig.update_layout(
-        height=750,
+        height=900,
         xaxis_title='Date',
         yaxis_title='Price',
         xaxis_rangeslider_visible=False,
-        hovermode='x unified',  # 統一顯示同一日期的所有數據
+        hovermode='x unified',
+        margin=dict(t=0),  # 移除頂端邊距
         legend=dict(
             orientation="h",  # 水平放置圖例
             yanchor="bottom", y=1, 
@@ -622,6 +782,8 @@ def stock_detail_k():
     fig_html = fig.to_html(full_html=False)
 
     return render_template('stock_detail_k.html', stock_id=stock_id, k_line_html=fig_html)
+
+
 
 
 
@@ -676,8 +838,8 @@ def stock_detail_w():
         'Trading_Volume': 'Volume'
     })
 
-    # 預設顯示所有移動平均線
-    moving_averages = [5, 10, 20, 60, 120, 240]
+    # 計算所有移動平均線
+    moving_averages = [5, 10, 20, 60, 120, 240]  # 所有移動平均線
     color_map = {5: 'blue', 10: 'orange', 20: 'yellow', 60: 'purple', 120: 'brown', 240: 'red'}
     
     for ma in moving_averages:
@@ -692,10 +854,28 @@ def stock_detail_w():
         df_weekly['Upper_BB'] = df_weekly['MA20'] + (df_weekly['stddev'] * 2)
         df_weekly['Lower_BB'] = df_weekly['MA20'] - (df_weekly['stddev'] * 2)
 
-    # 創建子圖，使用 row_heights 調整高度
-    fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.1, 
-                        subplot_titles=('','' , 'RSI and MACD'),
-                        row_heights=[0.7, 0.15, 0.15])
+    # 計算 RSI 指標
+    if len(df_weekly) >= 14:  # 檢查資料長度是否足夠計算 RSI
+        delta = df_weekly['Close'].diff(1)
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        avg_gain = gain.rolling(window=14, min_periods=1).mean()
+        avg_loss = loss.rolling(window=14, min_periods=1).mean()
+        rs = avg_gain / avg_loss
+        df_weekly['RSI'] = 100 - (100 / (1 + rs))
+
+    # 計算 MACD 指標
+    if len(df_weekly) >= 13:  # 檢查資料長度是否足夠計算 MACD
+        df_weekly['EMA6'] = df_weekly['Close'].ewm(span=6, adjust=False).mean()
+        df_weekly['EMA13'] = df_weekly['Close'].ewm(span=13, adjust=False).mean()
+        df_weekly['MACD'] = df_weekly['EMA6'] - df_weekly['EMA13']
+        df_weekly['Signal'] = df_weekly['MACD'].ewm(span=5, adjust=False).mean()
+        df_weekly['MACD_Hist'] = df_weekly['MACD'] - df_weekly['Signal']  # MACD柱狀圖
+
+    # 創建子圖，使用 row_heights 調整高度，為 OSC 增加一個獨立的子圖
+    fig = make_subplots(rows=4, cols=1, shared_xaxes=True, vertical_spacing=0.05, 
+                        subplot_titles=('', '', 'RSI & MACD', 'OSC'),
+                        row_heights=[0.5, 0.1, 0.2, 0.2])
 
     # K線圖
     fig.add_trace(go.Candlestick(x=df_weekly.index,
@@ -709,7 +889,7 @@ def stock_detail_w():
 
     # 添加所有移動平均線
     for ma in moving_averages:
-        if ma <= len(df_weekly):
+        if len(df_weekly) >= ma:
             fig.add_trace(go.Scatter(x=df_weekly.index, y=df_weekly[f'MA{ma}'], mode='lines', name=f'MA{ma}', line=dict(color=color_map[ma])), row=1, col=1)
 
     # 檢查布林帶是否存在
@@ -718,27 +898,8 @@ def stock_detail_w():
         fig.add_trace(go.Scatter(x=df_weekly.index, y=df_weekly['Upper_BB'], mode='lines', name='Upper BB', line=dict(color='gray', dash='dash')), row=1, col=1)
         fig.add_trace(go.Scatter(x=df_weekly.index, y=df_weekly['Lower_BB'], mode='lines', name='Lower BB', line=dict(color='gray', dash='dash')), row=1, col=1)
 
-    # 計算 RSI 指標
-    if len(df_weekly) >= 14:  # 檢查資料長度是否足夠計算 RSI
-        delta = df_weekly['Close'].diff(1)
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
-        avg_gain = gain.rolling(window=14, min_periods=1).mean()
-        avg_loss = loss.rolling(window=14, min_periods=1).mean()
-        rs = avg_gain / avg_loss
-        df_weekly['RSI'] = 100 - (100 / (1 + rs))
-
-    # 計算 MACD 指標
-    if len(df_weekly) >= 26:  # 檢查資料長度是否足夠計算 MACD
-        df_weekly['EMA12'] = df_weekly['Close'].ewm(span=12, adjust=False).mean()
-        df_weekly['EMA26'] = df_weekly['Close'].ewm(span=26, adjust=False).mean()
-        df_weekly['MACD'] = df_weekly['EMA12'] - df_weekly['EMA26']
-        df_weekly['Signal'] = df_weekly['MACD'].ewm(span=9, adjust=False).mean()
-
-    # 決定交易量顏色（漲紅跌綠）
+    # 在第二個子圖中添加交易量
     volume_colors = ['red' if df_weekly['Close'][i] > df_weekly['Open'][i] else 'green' for i in range(len(df_weekly))]
-
-    # 在第二個子圖中添加交易量，顏色與K線圖一致
     fig.add_trace(go.Bar(x=df_weekly.index, y=df_weekly['Volume'], name='Trading Volume', marker_color=volume_colors), row=2, col=1)
     
     # 在第三個子圖中添加 RSI 和 MACD
@@ -749,13 +910,82 @@ def stock_detail_w():
         fig.add_trace(go.Scatter(x=df_weekly.index, y=df_weekly['MACD'], mode='lines', name='MACD', line=dict(color='blue')), row=3, col=1)
         fig.add_trace(go.Scatter(x=df_weekly.index, y=df_weekly['Signal'], mode='lines', name='Signal', line=dict(color='red')), row=3, col=1)
 
-    # 更新布局，設置更酷的視覺效果與互動選項
+    # 在第四個子圖中添加 MACD 的柱狀圖（Histogram）
+    if 'MACD_Hist' in df_weekly.columns:
+        fig.add_trace(go.Bar(x=df_weekly.index, y=df_weekly['MACD_Hist'], name='OSC (MACD Histogram)',
+                             marker_color=['red' if val >= 0 else 'green' for val in df_weekly['MACD_Hist']]), row=4, col=1)
+        # 添加一條水平線，表示零軸（實線）
+        fig.add_hline(y=0, line=dict(color="black", width=1), row=4, col=1)
+
+    # 更新各個子圖的 x 軸和 y 軸，讓它們有 L 形線條
+    fig.update_xaxes(
+        showline=True,  # 顯示 x 軸的線條
+        linecolor='black',  # x 軸線條的顏色
+        linewidth=2,  # x 軸線條的寬度
+        showticklabels=False,  # 不顯示日期標籤
+        row=1, col=1  # 第一張子圖 (K 線圖)
+    )
+
+    fig.update_xaxes(
+        showline=True,  # 顯示 x 軸的線條
+        linecolor='black',  # x 軸線條的顏色
+        linewidth=2,  # x 軸線條的寬度
+        showticklabels=False,  # 不顯示日期標籤
+        row=2, col=1  # 第二張子圖 (交易量圖)
+    )
+
+    fig.update_xaxes(
+        showline=True,  # 顯示 x 軸的線條
+        linecolor='black',  # x 軸線條的顏色
+        linewidth=2,  # x 軸線條的寬度
+        showticklabels=False,  # 不顯示日期標籤
+        row=3, col=1  # 第三張子圖 (RSI 和 MACD)
+    )
+
+    fig.update_xaxes(
+        showline=True,  # 顯示 x 軸的線條
+        linecolor='black',  # x 軸線條的顏色
+        linewidth=2,  # x 軸線條的寬度
+        showticklabels=True,  # 僅在 OSC 下方顯示日期標籤
+        row=4, col=1  # 第四張子圖 (OSC)
+    )
+
+    fig.update_yaxes(
+        showline=True,  # 顯示 y 軸的線條
+        linecolor='black',  # y 軸線條的顏色
+        linewidth=2,  # y 軸線條的寬度
+        row=1, col=1  # 第一張子圖 (K 線圖)
+    )
+
+    fig.update_yaxes(
+        showline=True,  # 顯示 y 軸的線條
+        linecolor='black',  # y 軸線條的顏色
+        linewidth=2,  # y 軸線條的寬度
+        row=2, col=1  # 第二張子圖 (交易量圖)
+    )
+
+    fig.update_yaxes(
+        showline=True,  # 顯示 y 軸的線條
+        linecolor='black',  # y 軸線條的顏色
+        linewidth=2,  # y 軸線條的寬度
+        row=3, col=1  # 第三張子圖 (RSI 和 MACD)
+    )
+
+    fig.update_yaxes(
+        showline=True,  # 顯示 y 軸的線條
+        linecolor='black',  # y 軸線條的顏色
+        linewidth=2,  # y 軸線條的寬度
+        row=4, col=1  # 第四張子圖 (OSC)
+    )
+
+    # 更新布局以移除頂端邊距
     fig.update_layout(
-        height=750,
+        height=900,
         xaxis_title='Date',
         yaxis_title='Price',
         xaxis_rangeslider_visible=False,
-        hovermode='x unified',  # 統一顯示同一日期的所有數據
+        hovermode='x unified',
+        margin=dict(t=0),  # 移除頂端邊距
         legend=dict(
             orientation="h",  # 水平放置圖例
             yanchor="bottom", y=1, 
@@ -770,22 +1000,12 @@ def stock_detail_w():
         )
     )
 
-    # 強制顯示 x 軸日期，只在K線圖下方顯示
-    fig.update_xaxes(
-        showticklabels=True,  # 這裡只會在第一個子圖顯示日期
-        tickfont=dict(family='Arial', size=12, color='black'),
-        tickangle=45,  # 避免日期重疊
-        row=1, col=1  # 只在K線圖部分顯示日期
-    )
-
-    # 隱藏其他子圖的 x 軸標籤
-    fig.update_xaxes(showticklabels=False, row=2, col=1)
-    fig.update_xaxes(showticklabels=False, row=3, col=1)
-
     # 將圖表儲存為 HTML 格式以便於顯示
     fig_html = fig.to_html(full_html=False)
 
     return render_template('stock_detail_w.html', stock_id=stock_id, k_line_html=fig_html)
+
+
 
 
 
@@ -840,7 +1060,7 @@ def stock_detail_m():
         'Trading_Volume': 'Volume'
     })
 
-    # 預設顯示所有移動平均線
+    # 計算所有移動平均線
     moving_averages = [5, 10, 20, 60, 120, 240]  # 所有移動平均線
     color_map = {5: 'blue', 10: 'orange', 20: 'yellow', 60: 'purple', 120: 'brown', 240: 'red'}
     
@@ -856,10 +1076,28 @@ def stock_detail_m():
         df_monthly['Upper_BB'] = df_monthly['MA20'] + (df_monthly['stddev'] * 2)
         df_monthly['Lower_BB'] = df_monthly['MA20'] - (df_monthly['stddev'] * 2)
 
-    # 創建子圖，使用 row_heights 調整高度
-    fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.1, 
-                        subplot_titles=('','' , 'RSI and MACD'),
-                        row_heights=[0.7, 0.15, 0.15])
+    # 計算 RSI 指標
+    if len(df_monthly) >= 14:  # 檢查資料長度是否足夠計算 RSI
+        delta = df_monthly['Close'].diff(1)
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        avg_gain = gain.rolling(window=14, min_periods=1).mean()
+        avg_loss = loss.rolling(window=14, min_periods=1).mean()
+        rs = avg_gain / avg_loss
+        df_monthly['RSI'] = 100 - (100 / (1 + rs))
+
+    # 計算 MACD 指標
+    if len(df_monthly) >= 13:  # 檢查資料長度是否足夠計算 MACD
+        df_monthly['EMA6'] = df_monthly['Close'].ewm(span=6, adjust=False).mean()
+        df_monthly['EMA13'] = df_monthly['Close'].ewm(span=13, adjust=False).mean()
+        df_monthly['MACD'] = df_monthly['EMA6'] - df_monthly['EMA13']
+        df_monthly['Signal'] = df_monthly['MACD'].ewm(span=5, adjust=False).mean()
+        df_monthly['MACD_Hist'] = df_monthly['MACD'] - df_monthly['Signal']  # MACD柱狀圖
+
+    # 創建子圖，使用 row_heights 調整高度，為 OSC 增加一個獨立的子圖
+    fig = make_subplots(rows=4, cols=1, shared_xaxes=True, vertical_spacing=0.05, 
+                        subplot_titles=('', '', 'RSI & MACD', 'OSC'),
+                        row_heights=[0.5, 0.1, 0.2, 0.2])
 
     # K線圖
     fig.add_trace(go.Candlestick(x=df_monthly.index,
@@ -873,7 +1111,7 @@ def stock_detail_m():
 
     # 添加所有移動平均線
     for ma in moving_averages:
-        if ma <= len(df_monthly):
+        if len(df_monthly) >= ma:
             fig.add_trace(go.Scatter(x=df_monthly.index, y=df_monthly[f'MA{ma}'], mode='lines', name=f'MA{ma}', line=dict(color=color_map[ma])), row=1, col=1)
 
     # 檢查布林帶是否存在
@@ -882,27 +1120,8 @@ def stock_detail_m():
         fig.add_trace(go.Scatter(x=df_monthly.index, y=df_monthly['Upper_BB'], mode='lines', name='Upper BB', line=dict(color='gray', dash='dash')), row=1, col=1)
         fig.add_trace(go.Scatter(x=df_monthly.index, y=df_monthly['Lower_BB'], mode='lines', name='Lower BB', line=dict(color='gray', dash='dash')), row=1, col=1)
 
-    # 計算 RSI 指標
-    if len(df_monthly) >= 14:  # 檢查資料長度是否足夠計算 RSI
-        delta = df_monthly['Close'].diff(1)
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
-        avg_gain = gain.rolling(window=14, min_periods=1).mean()
-        avg_loss = loss.rolling(window=14, min_periods=1).mean()
-        rs = avg_gain / avg_loss
-        df_monthly['RSI'] = 100 - (100 / (1 + rs))
-
-    # 計算 MACD 指標
-    if len(df_monthly) >= 26:  # 檢查資料長度是否足夠計算 MACD
-        df_monthly['EMA12'] = df_monthly['Close'].ewm(span=12, adjust=False).mean()
-        df_monthly['EMA26'] = df_monthly['Close'].ewm(span=26, adjust=False).mean()
-        df_monthly['MACD'] = df_monthly['EMA12'] - df_monthly['EMA26']
-        df_monthly['Signal'] = df_monthly['MACD'].ewm(span=9, adjust=False).mean()
-
-    # 決定交易量顏色（漲紅跌綠）
+    # 在第二個子圖中添加交易量
     volume_colors = ['red' if df_monthly['Close'][i] > df_monthly['Open'][i] else 'green' for i in range(len(df_monthly))]
-
-    # 在第二個子圖中添加交易量，顏色與K線圖一致
     fig.add_trace(go.Bar(x=df_monthly.index, y=df_monthly['Volume'], name='Trading Volume', marker_color=volume_colors), row=2, col=1)
     
     # 在第三個子圖中添加 RSI 和 MACD
@@ -913,12 +1132,82 @@ def stock_detail_m():
         fig.add_trace(go.Scatter(x=df_monthly.index, y=df_monthly['MACD'], mode='lines', name='MACD', line=dict(color='blue')), row=3, col=1)
         fig.add_trace(go.Scatter(x=df_monthly.index, y=df_monthly['Signal'], mode='lines', name='Signal', line=dict(color='red')), row=3, col=1)
 
-    # 更新布局，設置更酷的視覺效果與互動選項
+    # 在第四個子圖中添加 MACD 的柱狀圖（Histogram）
+    if 'MACD_Hist' in df_monthly.columns:
+        fig.add_trace(go.Bar(x=df_monthly.index, y=df_monthly['MACD_Hist'], name='OSC (MACD Histogram)',
+                             marker_color=['red' if val >= 0 else 'green' for val in df_monthly['MACD_Hist']]), row=4, col=1)
+        # 添加一條水平線，表示零軸（實線）
+        fig.add_hline(y=0, line=dict(color="black", width=1), row=4, col=1)
+
+    # 更新各個子圖的 x 軸和 y 軸，讓它們有 L 形線條
+    fig.update_xaxes(
+        showline=True,  # 顯示 x 軸的線條
+        linecolor='black',  # x 軸線條的顏色
+        linewidth=2,  # x 軸線條的寬度
+        showticklabels=False,  # 不顯示日期標籤
+        row=1, col=1  # 第一張子圖 (K 線圖)
+    )
+
+    fig.update_xaxes(
+        showline=True,  # 顯示 x 軸的線條
+        linecolor='black',  # x 軸線條的顏色
+        linewidth=2,  # x 軸線條的寬度
+        showticklabels=False,  # 不顯示日期標籤
+        row=2, col=1  # 第二張子圖 (交易量圖)
+    )
+
+    fig.update_xaxes(
+        showline=True,  # 顯示 x 軸的線條
+        linecolor='black',  # x 軸線條的顏色
+        linewidth=2,  # x 軸線條的寬度
+        showticklabels=False,  # 不顯示日期標籤
+        row=3, col=1  # 第三張子圖 (RSI 和 MACD)
+    )
+
+    fig.update_xaxes(
+        showline=True,  # 顯示 x 軸的線條
+        linecolor='black',  # x 軸線條的顏色
+        linewidth=2,  # x 軸線條的寬度
+        showticklabels=True,  # 僅在 OSC 下方顯示日期標籤
+        row=4, col=1  # 第四張子圖 (OSC)
+    )
+
+    fig.update_yaxes(
+        showline=True,  # 顯示 y 軸的線條
+        linecolor='black',  # y 軸線條的顏色
+        linewidth=2,  # y 軸線條的寬度
+        row=1, col=1  # 第一張子圖 (K 線圖)
+    )
+
+    fig.update_yaxes(
+        showline=True,  # 顯示 y 軸的線條
+        linecolor='black',  # y 軸線條的顏色
+        linewidth=2,  # y 軸線條的寬度
+        row=2, col=1  # 第二張子圖 (交易量圖)
+    )
+
+    fig.update_yaxes(
+        showline=True,  # 顯示 y 軸的線條
+        linecolor='black',  # y 軸線條的顏色
+        linewidth=2,  # y 軸線條的寬度
+        row=3, col=1  # 第三張子圖 (RSI 和 MACD)
+    )
+
+    fig.update_yaxes(
+        showline=True,  # 顯示 y 軸的線條
+        linecolor='black',  # y 軸線條的顏色
+        linewidth=2,  # y 軸線條的寬度
+        row=4, col=1  # 第四張子圖 (OSC)
+    )
+
+    # 更新布局以移除頂端邊距
     fig.update_layout(
-        height=750,
+        height=900,
+        xaxis_title='Date',
         yaxis_title='Price',
         xaxis_rangeslider_visible=False,
-        hovermode='x unified',  # 統一顯示同一日期的所有數據
+        hovermode='x unified',
+        margin=dict(t=0),  # 移除頂端邊距
         legend=dict(
             orientation="h",  # 水平放置圖例
             yanchor="bottom", y=1, 
@@ -933,22 +1222,13 @@ def stock_detail_m():
         )
     )
 
-    # 強制顯示 x 軸日期，只在K線圖下方顯示
-    fig.update_xaxes(
-        showticklabels=True,  # 這裡只會在第一個子圖顯示日期
-        tickfont=dict(family='Arial', size=12, color='black'),
-        tickangle=45,  # 避免日期重疊
-        row=1, col=1  # 只在K線圖部分顯示日期
-    )
-
-    # 隱藏其他子圖的 x 軸標籤
-    fig.update_xaxes(showticklabels=False, row=2, col=1)
-    fig.update_xaxes(showticklabels=False, row=3, col=1)
-
     # 將圖表儲存為 HTML 格式以便於顯示
     fig_html = fig.to_html(full_html=False)
 
     return render_template('stock_detail_m.html', stock_id=stock_id, k_line_html=fig_html)
+
+
+
 
 
 

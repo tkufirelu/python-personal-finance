@@ -1,0 +1,26 @@
+{% extends "base.html" %} {% block content %}
+
+<div class="container mt-4" style="padding-top: 20px;">
+  <div class="card" style="background-color: #f0f8ff; border: 1px solid #b0c4de; box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.2);font-family: 'Roboto', sans-serif;">
+    <div class="card-body custom-form">
+
+      <title>{{ category }} Stocks</title>
+
+
+      <h1 class="my-4">{{ category }} 類股</h1>
+        <div class="d-flex flex-wrap gap-2">
+            {% for stock in stocks %}
+            <form action="/stock_detail_year" method="post">
+                <input type="hidden" name="stock_id" value="{{ stock['stock_id'] }}">
+                <input type="hidden" name="stock_name" value="{{ stock['stock_name'] }}">
+                <button type="submit" class="btn btn-primary">{{ stock['stock_id'] }} - {{ stock['stock_name'] }}</button>
+            </form>
+            {% endfor %}
+
+
+
+  </div>
+ </div>
+</div>
+
+{% endblock %}

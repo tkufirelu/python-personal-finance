@@ -4,33 +4,32 @@
   <div class="card" style="background-color: #f0f8ff; border: 1px solid #b0c4de; box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.2);font-family: 'Roboto', sans-serif;">
     <div class="card-body custom-form">
 
-      <h4>台灣所有上市櫃股票一覽及查詢期間內交易記錄</h4>
-      <table class="table table-bordered">
-          <thead>
-              <tr>
-                  <th scope="col">產業類別</th>
-                  <th scope="col">股票代號</th>
-                  <th scope="col">股票名稱</th>
-                  <th scope="col">類型</th>
-              </tr>
-          </thead>
-          <tbody>
-              {% for item in data %}
-              <tr>
-                  <td>{{ item.industry_category }}</td>
-                  <td>
-                    <form action="stock_detail_year" method="post">
-                      <input type="hidden" name="stock_id" value="{{item.stock_id}}" />
-                      <button class="btn btn-outline-primary">{{ item.stock_id }}</button>
-                    </form> 
-                  </td>
-                  <!-- <td>{{ item.stock_id }}</td> -->
-                  <td>{{ item.stock_name }}</td>
-                  <td>{{ item.type }}</td>
-              </tr>
-              {% endfor %}
-          </tbody>
-      </table>
+      
+
+
+      <div class="d-flex justify-content-between align-items-center">
+        <h1 class="my-4">產業類別</h1>
+
+        <!-- 搜尋欄位 -->
+        <form class="d-flex" action="/search_stock" method="post">
+            <input class="form-control me-2" type="search" name="search_query" placeholder="輸入股票代號或名稱" aria-label="Search">
+            <button class="btn btn-outline-success" type="submit">搜尋</button>
+        </form>
+    </div>
+
+    <!-- 產業類別按鈕 -->
+    <div class="d-flex flex-wrap gap-2">
+        {% for category in industry_categories %}
+        <form action="/industry_stocks" method="post">
+            <input type="hidden" name="industry_category" value="{{ category }}">
+            <button type="submit" class="btn btn-outline-dark fw-bold">{{ category }}</button>
+        </form>
+        {% endfor %}
+    </div>
+
+
+
+
   </div>
  </div>
 </div>
